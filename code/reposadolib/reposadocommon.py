@@ -126,8 +126,7 @@ def validPreferences():
     for pref_name in ['UpdatesRootDir',  'UpdatesMetadataDir']:
         preference = pref(pref_name)
         if not preference:
-            print_stderr('ERROR: %s is not defined in %s.' %
-                            (pref_name, prefsFilePath()))
+            print_stderr(f'ERROR: {pref_name} is not defined in {prefsFilePath()}.')
             prefs_valid = False
         elif not os.path.exists(preference):
             print_stderr('WARNING: %s "%s" does not exist.'
@@ -164,7 +163,7 @@ def configure_prefs():
     except (IOError, ExpatError):
         prefs = {}
     # merge edited preferences
-    for key in _prefs.keys():
+    for key in _prefs:
         prefs[key] = _prefs[key]
     # write preferences to our file
     try:
@@ -211,12 +210,11 @@ def log(msg):
         return
     formatstr = '%b %d %H:%M:%S'
     try:
-        fileobj = open(LOGFILE, mode='a', buffering=1)
-        try:
-            print(time.strftime(formatstr), msg.encode('UTF-8'), file=fileobj)
-        except (OSError, IOError):
-            pass
-        fileobj.close()
+        with open(LOGFILE, mode='a', buffering=1) as fileobj:
+            try:
+                print(time.strftime(formatstr), msg.encode('UTF-8'), file=fileobj)
+            except (OSError, IOError):
+                pass
     except (OSError, IOError):
         pass
 
@@ -336,13 +334,12 @@ def getLocalPathNameFromURL(url, root_dir=None):
 def rewriteOneURL(full_url):
     '''Rewrites a single URL to point to our local replica'''
     our_base_url = pref('LocalCatalogURLBase')
-    if not full_url.startswith(our_base_url):
-        # only rewrite the URL if needed
-        (unused_scheme, unused_netloc,
-         path, unused_query, unused_fragment) = urlparse.urlsplit(full_url)
-        return our_base_url + path
-    else:
+    if full_url.startswith(our_base_url):
         return full_url
+    # only rewrite the URL if needed
+    (unused_scheme, unused_netloc,
+     path, unused_query, unused_fragment) = urlparse.urlsplit(full_url)
+    return our_base_url + path
 
 
 def rewriteURLsForProduct(product):
@@ -392,8 +389,8 @@ def writeAllBranchCatalogs():
             writeBranchCatalogs(localcatalogpath)
         else:
             print_stderr(
-                'WARNING: %s does not exist. Perhaps you need to run repo_sync?'
-                % localcatalogpath)
+                f'WARNING: {localcatalogpath} does not exist. Perhaps you need to run repo_sync?'
+            )
 
 
 def writeBranchCatalogs(localcatalogpath):
@@ -406,13 +403,13 @@ def writeBranchCatalogs(localcatalogpath):
     # now strip the '.sucatalog' bit from the name
     # so we can use it to construct our branch catalog names
     if localcatalogpath.endswith('.sucatalog'):
-        localcatalogpath = localcatalogpath[0:-10]
+        localcatalogpath = localcatalogpath[:-10]
 
     # now write filtered catalogs (branches)
     catalog_branches = getCatalogBranches()
     for branch in catalog_branches.keys():
-        branchcatalogpath = localcatalogpath + '_' + branch + '.sucatalog'
-        print_stdout('Building %s...' % os.path.basename(branchcatalogpath))
+        branchcatalogpath = f'{localcatalogpath}_{branch}.sucatalog'
+        print_stdout(f'Building {os.path.basename(branchcatalogpath)}...')
         # embed branch catalog name into the catalog for troubleshooting
         # and validation
         catalog['_CatalogName'] = os.path.basename(branchcatalogpath)
@@ -447,20 +444,13 @@ def writeBranchCatalogs(localcatalogpath):
                             rewriteURLsForProduct(catalog_entry)
                             catalog['Products'][product_key] = catalog_entry
                             continue
-            else:
-                # item is not listed in the main catalog and we don't have a
-                # local cache of product info. It either was never in this
-                # catalog or has been removed by Apple. In either case, we just
-                # skip the item -- we can't add it to the catalog.
-                pass
-
         plistlib.writePlist(catalog, branchcatalogpath)
 
 
 def writeAllLocalCatalogs():
     '''Writes out all local and branch catalogs. Used when we purge products.'''
     for catalog_URL in pref('AppleCatalogURLs'):
-        localcatalogpath = getLocalPathNameFromURL(catalog_URL) + '.apple'
+        localcatalogpath = f'{getLocalPathNameFromURL(catalog_URL)}.apple'
         if os.path.exists(localcatalogpath):
             writeLocalCatalogs(localcatalogpath)
 
@@ -473,11 +463,11 @@ def writeLocalCatalogs(applecatalogpath):
     rewriteURLs(catalog)
     # remove the '.apple' from the end of the localcatalogpath
     if applecatalogpath.endswith('.apple'):
-        localcatalogpath = applecatalogpath[0:-6]
+        localcatalogpath = applecatalogpath[:-6]
     else:
         localcatalogpath = applecatalogpath
 
-    print_stdout('Building %s...' % os.path.basename(localcatalogpath))
+    print_stdout(f'Building {os.path.basename(localcatalogpath)}...')
     catalog['_CatalogName'] = os.path.basename(localcatalogpath)
     downloaded_products_list = getDownloadStatus()
 
@@ -521,9 +511,8 @@ def writeXMLtoFile(node, path):
     '''Write XML dom node to file'''
     xml_string = node.toxml('utf-8')
     try:
-        fileobject = open(path, mode='w')
-        print(xml_string, file=fileobject)
-        fileobject.close()
+        with open(path, mode='w') as fileobject:
+            print(xml_string, file=fileobject)
     except (OSError, IOError):
         print_stderr('Couldn\'t write XML to %s' % path)
 
@@ -547,40 +536,38 @@ def check_or_remove_config_data_attribute(
         products = getProductInfo()
     config_data_products = set()
     for key in product_list:
-        if key in products:
-            if products[key].get('CatalogEntry'):
-                distributions = products[key]['CatalogEntry'].get(
-                    'Distributions', {})
-                for lang in distributions.keys():
-                    distPath = getLocalPathNameFromURL(
-                        products[key]['CatalogEntry']['Distributions'][lang])
-                    if not os.path.exists(distPath):
-                        continue
-                    dom = readXMLfile(distPath)
-                    if dom:
-                        found_config_data = False
-                        option_elements = (
-                            dom.getElementsByTagName('options') or [])
-                        for element in option_elements:
-                            if 'type' in element.attributes.keys():
-                                if (element.attributes['type'].value
-                                        == 'config-data'):
-                                    found_config_data = True
-                                    config_data_products.add(key)
-                                    if remove_attr:
-                                        element.removeAttribute('type')
-                        # done editing dom
-                        if found_config_data and remove_attr:
-                            try:
-                                writeXMLtoFile(dom, distPath)
-                            except (OSError, IOError):
-                                pass
-                            else:
-                                if not suppress_output:
-                                    print_stdout('Updated dist: %s', distPath)
-                        elif not found_config_data:
+        if key in products and products[key].get('CatalogEntry'):
+            distributions = products[key]['CatalogEntry'].get(
+                'Distributions', {})
+            for lang in distributions.keys():
+                distPath = getLocalPathNameFromURL(
+                    products[key]['CatalogEntry']['Distributions'][lang])
+                if not os.path.exists(distPath):
+                    continue
+                if dom := readXMLfile(distPath):
+                    found_config_data = False
+                    option_elements = (
+                        dom.getElementsByTagName('options') or [])
+                    for element in option_elements:
+                        if 'type' in element.attributes.keys() and (
+                            element.attributes['type'].value == 'config-data'
+                        ):
+                            found_config_data = True
+                            config_data_products.add(key)
+                            if remove_attr:
+                                element.removeAttribute('type')
+                    # done editing dom
+                    if found_config_data and remove_attr:
+                        try:
+                            writeXMLtoFile(dom, distPath)
+                        except (OSError, IOError):
+                            pass
+                        else:
                             if not suppress_output:
-                                print_stdout('No config-data in %s', distPath)
+                                print_stdout('Updated dist: %s', distPath)
+                    elif not found_config_data:
+                        if not suppress_output:
+                            print_stdout('No config-data in %s', distPath)
     return list(config_data_products)
 
 LOGFILE = None

@@ -67,10 +67,7 @@ def _win_os_rename(src, dst):
         os.unlink(dst)
         os.rename(src, dst)
 
-if os.name in ('nt', 'ce'):
-    os_rename = _win_os_rename
-else:
-    os_rename = os.rename
+os_rename = _win_os_rename if os.name in ('nt', 'ce') else os.rename
 
 def parseServerMetadata(filename):
     '''Parses a softwareupdate server metadata file, looking for information
@@ -139,9 +136,7 @@ def parse_cdata(cdata_str):
         if 'key' in match_dict.keys() and 'value' in match_dict.keys():
             key = match_dict['key']
             value = match_dict['value']
-            # now 'de-escape' escaped quotes
-            quote = match_dict.get('value_quote')
-            if quote:
+            if quote := match_dict.get('value_quote'):
                 escaped_quote = '\\' + quote
                 value = value.replace(escaped_quote, quote)
             parsed_data[key] = value
@@ -504,10 +499,7 @@ def get_saved_etag(url):
     #global _ETAG
     if _ETAG == {}:
         reposadocommon.getDataFromPlist('ETags.plist')
-    if url in _ETAG:
-        return _ETAG[url]
-    else:
-        return None
+    return _ETAG[url] if url in _ETAG else None
 
 
 def record_etag(url, etag):
@@ -610,10 +602,11 @@ def getPreferredLocalization(list_of_localizations):
             if language in list_of_localizations:
                 return language
     else:
-        preferred_langs = (
+        if preferred_langs := (
             NSBundle.preferredLocalizationsFromArray_forPreferences_(
-                list_of_localizations, None))
-        if preferred_langs:
+                list_of_localizations, None
+            )
+        ):
             return preferred_langs[0]
 
     if 'English' in list_of_localizations:
@@ -836,10 +829,7 @@ def main():
             reposadocommon.print_stderr('ERROR: curl tool not found at %s',
                                         reposadocommon.pref('CurlPath'))
             exit(-1)
-        if not reposadocommon.pref('LocalCatalogURLBase'):
-            download_packages = False
-        else:
-            download_packages = True
+        download_packages = bool(reposadocommon.pref('LocalCatalogURLBase'))
         if options.logfile:
             reposadocommon.LOGFILE = options.logfile
         elif reposadocommon.pref('RepoSyncLogFile'):

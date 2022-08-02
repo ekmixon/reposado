@@ -70,7 +70,7 @@ def find_all_product_dirs_on_disk():
 
 def get_product_location(product):
     '''Returns local path to replicated product.'''
-    if not 'CatalogEntry' in product:
+    if 'CatalogEntry' not in product:
         # something is wrong with the product entry
         return None
     catalog_entry = product['CatalogEntry']
@@ -88,14 +88,13 @@ def get_product_location(product):
     return os.path.dirname(filepath)
 
 
-def all_product_dirs_from_productinfo(): # pylint: disable=invalid-name
+def all_product_dirs_from_productinfo():    # pylint: disable=invalid-name
     '''Returns a set of all the product directories for products in our
     ProductInformation.plist'''
     product_dirs = set()
     products = reposadocommon.getProductInfo()
     for product in products:
-        product_location = get_product_location(products[product])
-        if product_location:
+        if product_location := get_product_location(products[product]):
             product_dirs.add(product_location)
     return product_dirs
 
@@ -108,20 +107,18 @@ def main():
 
     print("Finding all product directories stored on disk...")
     disk_dirs = find_all_product_dirs_on_disk()
-    print("    Found %s products" % len(disk_dirs))
+    print(f"    Found {len(disk_dirs)} products")
 
     print("Finding all product directories in our internal database...")
     info_dirs = all_product_dirs_from_productinfo()
-    print("    Found %s products" % len(info_dirs))
+    print(f"    Found {len(info_dirs)} products")
 
-    missing_disk_dirs = info_dirs - disk_dirs
-    if missing_disk_dirs:
+    if missing_disk_dirs := info_dirs - disk_dirs:
         print("\nFound %s products that might not be on-disk:"
               % len(missing_disk_dirs))
         print("\n".join(sorted(missing_disk_dirs)))
 
-    orphaned_dirs = disk_dirs - info_dirs
-    if orphaned_dirs:
+    if orphaned_dirs := disk_dirs - info_dirs:
         print("\nFound %s abandoned/orphaned product directories:"
               % len(orphaned_dirs))
         print("\n".join(sorted(orphaned_dirs)))
@@ -131,11 +128,11 @@ def main():
             '(WARNING: this cannot be undone)? [y/n]: ')
         if answer.lower().startswith('y'):
             for directory in orphaned_dirs:
-                print ("Removing %s..." % directory)
+                print(f"Removing {directory}...")
                 try:
                     shutil.rmtree(directory)
                 except (OSError, IOError) as err:
-                    print('Error: %s' % err, file=sys.stderr)
+                    print(f'Error: {err}', file=sys.stderr)
     else:
         print("Can't find anything to clean up!")
 
